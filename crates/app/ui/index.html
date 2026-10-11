@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>变速齿轮</title>
+<style>
+  :root {
+    --bg: #16181d; --panel: #1f2229; --line: #2e323c; --text: #e6e8ec;
+    --muted: #8b919e; --accent: #f5a623; --ok: #4cc38a; --err: #ff6b6b; --warn: #f0b95a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Microsoft YaHei UI", "Segoe UI", sans-serif; user-select: none;
+  }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .05em; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row + .row { margin-top: 8px; }
+  label { color: var(--muted); width: 72px; flex: none; }
+  select, input, button {
+    font: inherit; color: var(--text); background: #2a2e37; border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 8px; min-width: 0;
+  }
+  select, input { flex: 1; }
+  button { cursor: pointer; flex: none; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled, select:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1300; font-weight: 600; }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  #gauge { text-align: center; padding: 18px 0 14px; }
+  #gauge .value { font-size: 48px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; color: var(--muted); }
+  #gauge.active .value { color: var(--accent); }
+  #gauge .sub { margin-top: 6px; color: var(--muted); font-size: 12px; }
+  #message { min-height: 20px; font-size: 12px; color: var(--muted); padding: 0 2px; }
+  #message.err { color: var(--err); }
+  #message.ok { color: var(--ok); }
+  #warning { display: none; margin: 0 0 12px; padding: 8px 10px; border-radius: 6px; font-size: 12px;
+    color: var(--warn); background: #2b2416; border: 1px solid #5a4a22; }
+  #badge { flex: none; font-size: 12px; white-space: nowrap; color: var(--muted); }
+  #badge.verified { color: var(--ok); font-weight: 600; }
+  #badge.outdated { color: var(--warn); }
+  #modeNote { font-size: 12px; color: var(--muted); margin: 4px 0 0 80px; min-height: 18px; }
+  input[type=checkbox] { flex: none; width: 16px; height: 16px; accent-color: var(--accent); }
+  label.wide { width: auto; flex: 1; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div id="warning"></div>
+
+  <section id="gauge">
+    <div class="value" id="gaugeValue">1×</div>
+    <div class="sub" id="gaugeSub">未连接游戏</div>
+  </section>
+
+  <section>
+    <h2>游戏</h2>
+    <div class="row">
+      <select id="process"></select>
+      <button id="connect" class="primary">连接</button>
+    </div>
+    <div class="row">
+      <label>变速方式</label>
+      <select id="mode">
+        <option value="tick">逻辑帧倍率（LÖVE 引擎）</option>
+        <option value="time">时间倍率（通用）</option>
+      </select>
+      <span id="badge"></span>
+    </div>
+    <div id="modeNote"></div>
+    <div class="row">
+      <input type="checkbox" id="auto">
+      <label for="auto" class="wide">检测到这个游戏启动时自动连接</label>
+    </div>
+  </section>
+
+  <section>
+    <h2>倍率</h2>
+    <div class="row">
+      <input id="speed" type="number" min="0.1" max="20" step="0.5">
+      <button data-speed="2">2×</button>
+      <button data-speed="3">3×</button>
+      <button data-speed="5">5×</button>
+      <button data-speed="0.5">0.5×</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>热键</h2>
+    <div class="row"><label>按住加速</label><select id="holdKey"></select></div>
+    <div class="row"><label>切换加速</label><select id="toggleKey"></select></div>
+    <div class="hint">按键不会被拦截，游戏仍会收到，请选游戏里没用到的键。</div>
+  </section>
+
+  <div id="message"></div>
+
+<script>
+const { invoke } = window.__TAURI__.core;
+const { listen } = window.__TAURI__.event;
+const $ = (id) => document.getElementById(id);
+
+// [显示名, Windows 虚拟键码]
+const KEYS = [["不使用", 0]];
+for (let i = 1; i <= 12; i++) KEYS.push(["F" + i, 0x6f + i]);
+KEYS.push(
+  ["` (波浪键)", 0xc0], ["Tab", 0x09], ["Caps Lock", 0x14], ["左 Shift", 0xa0], ["左 Ctrl", 0xa2],
+  ["左 Alt", 0xa4], ["空格", 0x20], ["鼠标侧键 1", 0x05], ["鼠标侧键 2", 0x06], ["鼠标中键", 0x04],
+  ["小键盘 0", 0x60], ["小键盘 +", 0x6b], ["小键盘 -", 0x6d], ["小键盘 *", 0x6a],
+);
+for (const id of ["holdKey", "toggleKey"]) {
+  for (const [name, vk] of KEYS) $(id).add(new Option(name, vk));
+}
+
+let state = null;
+
+function say(text, kind) {
+  $("message").textContent = text || "";
+  $("message").className = kind || "";
+}
+
+const MODE_TEXT = { tick: "逻辑帧倍率（LÖVE 引擎）", time: "时间倍率（通用）" };
+
+function renderMode(s) {
+  const badge = $("badge"), note = $("modeNote");
+  badge.className = s.attached ? s.verification : "";
+  badge.title = "";
+  note.textContent = "";
+  badge.textContent = "";
+  if (s.attached && s.verification === "verified") {
+    badge.textContent = "✓ 已验证";
+    badge.title = `已于 ${s.verified_date} 在该游戏上测试通过`;
+    note.textContent = `已于 ${s.verified_date} 在该游戏上测试通过`;
+  } else if (s.attached && s.verification === "outdated") {
+    badge.textContent = "⚠ 版本已变";
+    note.textContent = "游戏已更新，这个方式还没在新版本上重新验证";
+  } else if (s.attached) {
+    badge.textContent = "未验证";
+    note.textContent = "这个方式没有验证记录，不保证有效";
+  }
+  // 验证过的那个方式在下拉框里也带勾
+  for (const o of $("mode").options) {
+    o.textContent = MODE_TEXT[o.value] + (s.attached && o.value === s.verified_mode ? "  ✓" : "");
+  }
+}
+
+function fmt(n) { return (Math.round(n * 100) / 100) + "×"; }
+
+function render(s, syncInputs) {
+  state = s;
+  $("gauge").classList.toggle("active", s.active);
+  $("gaugeValue").textContent = fmt(s.active ? s.speed : 1);
+  $("gaugeSub").textContent = s.attached ? `已连接 ${s.target}（PID ${s.pid}）` : "未连接游戏";
+  $("connect").textContent = s.attached ? "断开" : "连接";
+  $("connect").classList.toggle("primary", !s.attached);
+  $("process").disabled = s.attached;
+  $("mode").disabled = !s.attached;
+  $("auto").disabled = !s.attached;
+  $("auto").checked = s.auto_attach;
+  $("warning").style.display = s.warning ? "block" : "none";
+  $("warning").textContent = s.warning;
+  renderMode(s);
+  $("mode").options[0].disabled = !s.tick_supported;
+  $("mode").options[1].disabled = !s.time_supported;
+  for (const b of document.querySelectorAll("[data-speed]")) {
+    b.classList.toggle("on", Number(b.dataset.speed) === s.speed);
+  }
+  if (syncInputs) {
+    $("speed").value = s.speed;
+    $("mode").value = s.mode;
+    $("holdKey").value = s.hold_vk;
+    $("toggleKey").value = s.toggle_vk;
+  }
+}
+
+// 列表已按"已验证 → 有配置 → 其他"排好序，已验证的游戏和其余进程之间加一条分割线
+async function refresh() {
+  const list = await invoke("list_processes");
+  const select = $("process");
+  const previous = select.value;
+  select.replaceChildren();
+  let separated = false;
+  for (const p of list) {
+    if (!separated && !p.verified && list.some((x) => x.verified)) {
+      select.appendChild(document.createElement("hr"));
+      separated = true;
+    }
+    const mark = p.verified ? "✓ " : p.known ? "★ " : "";
+    const o = new Option(`${mark}${p.title}  —  ${p.name}`, p.pid);
+    o.dataset.name = p.name;
+    select.add(o);
+  }
+  if ([...select.options].some((o) => o.value === previous)) select.value = previous;
+  else if (list.length && (list[0].verified || list[0].known)) select.selectedIndex = 0;
+}
+
+async function pushConfig() {
+  const speed = Number($("speed").value);
+  if (!(speed >= 0.05 && speed <= 100)) return say("倍率需在 0.05 到 100 之间", "err");
+  try {
+    render(await invoke("set_config", {
+      speed,
+      mode: $("mode").value,
+      holdVk: Number($("holdKey").value),
+      toggleVk: Number($("toggleKey").value),
+      autoAttach: $("auto").checked,
+    }), false);
+    say("");
+  } catch (e) { say(String(e), "err"); }
+}
+
+// 每次点开下拉框都先刷新列表再弹出，这样不会看到过期的进程
+$("process").addEventListener("mousedown", async (e) => {
+  const select = $("process");
+  if (select.disabled || typeof select.showPicker !== "function") return;
+  e.preventDefault();
+  select.focus();
+  await refresh();
+  try { select.showPicker(); } catch { /* 弹不出来就算了，列表已经是新的 */ }
+});
+$("connect").onclick = async () => {
+  if (state && state.attached) {
+    render(await invoke("detach"), true);
+    say("已断开，游戏恢复正常速度");
+    return refresh();
+  }
+  const option = $("process").selectedOptions[0];
+  if (!option) return say("先选一个游戏进程", "err");
+  $("connect").disabled = true;
+  say("正在连接…");
+  try {
+    const s = await invoke("attach", { pid: Number(option.value), name: option.dataset.name });
+    render(s, true);
+    if (!s.tick_supported && !s.time_supported) say("已注入，但没有可用的变速方式", "err");
+    else say(`连接成功：${s.game_name}`, "ok");
+  } catch (e) { say(String(e), "err"); }
+  $("connect").disabled = false;
+};
+for (const id of ["speed", "mode", "holdKey", "toggleKey", "auto"]) $(id).onchange = pushConfig;
+for (const b of document.querySelectorAll("[data-speed]")) {
+  b.onclick = () => { $("speed").value = b.dataset.speed; pushConfig(); };
+}
+
+listen("state", (e) => {
+  const wasAttached = state && state.attached;
+  // 连上或断开时，界面上的倍率、方式要换成这个游戏的配置
+  const changed = !state || state.attached !== e.payload.attached || state.pid !== e.payload.pid;
+  render(e.payload, changed);
+  if (wasAttached && !e.payload.attached) { say("游戏已退出"); refresh(); }
+});
+listen("notice", (e) => { say(e.payload.text, e.payload.kind); refresh(); });
+
+(async () => {
+  render(await invoke("get_state"), true);
+  await refresh();
+})();
+</script>
+</body>
+</html>

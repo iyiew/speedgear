@@ -1,0 +1,11 @@
+{
+  "exe": "Kingdom Rush Genesis.exe",
+  "name": "王国保卫战 6：新启程",
+  "mode": "tick",
+  "speed": 3.0,
+  "verified": {
+    "build": "1206696700-1791700492",
+    "date": "2026-10-11"
+  },
+  "auto_attach": false
+}
