@@ -3,5 +3,9 @@
   "name": "王国保卫战：复仇",
   "mode": "time",
   "speed": 3.0,
+  "verified": {
+    "build": "13182464-1791732192",
+    "date": "2026-10-11"
+  },
   "auto_attach": false
 }

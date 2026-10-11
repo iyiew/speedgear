@@ -22,7 +22,7 @@ SpeedGear is a game speed changer for Windows. Hold a key to fast-forward a sing
 | Game | Method | Status |
 |---|---|---|
 | Kingdom Rush Genesis (Steam) | Logic-tick scale | ✓ Verified |
-| Kingdom Rush Vengeance (Steam) | Time scale | Not verified |
+| Kingdom Rush Vengeance (Steam) | Time scale | ✓ Verified |
 
 Other 64-bit single-player games are worth a try. SpeedGear detects which method is available, but there is no guarantee it works.
 

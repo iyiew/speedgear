@@ -22,7 +22,7 @@
 | 游戏 | 变速方式 | 状态 |
 |---|---|---|
 | Kingdom Rush Genesis（王国保卫战 6：新启程，Steam） | 逻辑帧倍率 | ✓ 已验证 |
-| Kingdom Rush Vengeance（王国保卫战：复仇，Steam） | 时间倍率 | 未验证 |
+| Kingdom Rush Vengeance（王国保卫战：复仇，Steam） | 时间倍率 | ✓ 已验证 |
 
 其他 64 位单机游戏可以直接试，程序会自动识别能用哪种方式，但不保证有效。
 

@@ -193,11 +193,11 @@ mod tests {
     }
 
     #[test]
-    fn vengeance_profile_uses_time_mode_and_is_not_verified_yet() {
+    fn vengeance_profile_uses_time_mode_and_is_verified() {
         let all = builtin();
         let kr = all.iter().find(|p| p.exe == "Kingdom Rush Vengeance.exe").unwrap();
         assert_eq!(kr.mode, "time");
-        assert_eq!(kr.verified, None);
+        assert!(kr.verified.is_some());
     }
 
     #[test]
